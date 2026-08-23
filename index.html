@@ -32,6 +32,21 @@
                     <span id="syncStatus" class="status-badge">offline</span>
                 </div>
                 <button id="newSessionBtn" class="btn btn-primary">Neue Reise starten</button>
+
+                <!-- NEU: Session Code Join -->
+                <div id="joinSection" class="join-section">
+                    <p class="join-label">oder Reise-Code eingeben:</p>
+                    <form id="joinForm" class="form-inline">
+                        <input type="text" id="sessionCodeInput" 
+                               placeholder="ABC123" 
+                               maxlength="6"
+                               inputmode="text"
+                               autocapitalize="characters"
+                               required>
+                        <button type="submit" class="btn btn-sm btn-primary">Beitreten</button>
+                    </form>
+                </div>
+                
             </section>
 
             <section id="participantsSection" class="section hidden">
