@@ -1,9 +1,8 @@
 // ============================================
-// MANNETEILT - Core Application v3
+// MANNETEILT - Core Application v4
 // "Manne teilt, alle wissen Bescheid"
 // ============================================
 
-// Supabase Credentials (Frontend-safe with RLS protection)
 const SUPABASE_URL = 'https://gggbybpiostztrddhvgm.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_xGdq57oOwz1u0OvmUuhrpA_-zpgdQqN';
 
@@ -26,7 +25,11 @@ class ManneTeiltApp {
         this.cacheElements();
         this.bindEvents();
         await this.registerSW();
-        this.initSupabase(); // Direct initialization
+        this.initSupabase();
+        
+        // BUG FIX 2: loadFromURL INSIDE init, after Supabase is ready
+        await this.loadFromURL();
+        
         this.render();
     }
 
@@ -95,14 +98,12 @@ class ManneTeiltApp {
     }
 
     // ============================================
-    // SUPABASE INITIALIZATION (NO SETTINGS UI)
+    // SUPABASE
     // ============================================
 
     initSupabase() {
         const { createClient } = supabase;
         this.state.supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
-        
-        this.showToast('🔌 Supabase verbunden!');
         this.updateConnection(true);
     }
 
@@ -144,7 +145,6 @@ class ManneTeiltApp {
         }
 
         this.showToast(`🎉 Reise "${name}" gestartet — Manne teilt!`);
-        this.updateUIState('active');
         this.render();
         this.copyShareLink();
     }
@@ -159,24 +159,28 @@ class ManneTeiltApp {
 
             if (!error && data) {
                 this.state.session = { id: data.id, name: data.name, createdAt: data.created_at };
-                localStorage.setItem('manneteil_session', JSON.stringify(this.state.session));
+                localStorage.setItem('manneteilt_session', JSON.stringify(this.state.session));
                 await this.loadData();
                 this.showToast('📥 Daten geladen — ManneTeilt');
-                return;
+                return true;
             }
         } catch (err) {
             console.error('Load from Supabase failed:', err);
         }
 
-        const saved = localStorage.getItem('manneteil_session');
+        // Fallback: localStorage
+        const saved = localStorage.getItem('manneteilt_session');
         if (saved) {
-            this.state.session = JSON.parse(saved);
-            this.state.participants = JSON.parse(localStorage.getItem('manneteil_participants') || '[]');
-            this.state.expenses = JSON.parse(localStorage.getItem('manneteil_expenses') || '[]');
+            const localSession = JSON.parse(saved);
+            if (localSession.id === sessionId) {
+                this.state.session = localSession;
+                this.state.participants = JSON.parse(localStorage.getItem('manneteilt_participants') || '[]');
+                this.state.expenses = JSON.parse(localStorage.getItem('manneteilt_expenses') || '[]');
+                return true;
+            }
         }
 
-        this.updateUIState('active');
-        this.render();
+        return false;
     }
 
     async loadData() {
@@ -311,7 +315,8 @@ class ManneTeiltApp {
         this.elements.payerSelect.innerHTML = this.state.participants
             .map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 
-        this.elements.expenseModal.show();
+        // BUG FIX 3: showModal() instead of show() for proper modal behavior
+        this.elements.expenseModal.showModal();
     }
 
     renderSplitCheckboxes(selectedIds) {
@@ -475,9 +480,9 @@ class ManneTeiltApp {
 
     persistData(type) {
         if (type === 'participants') {
-            localStorage.setItem('manneteil_participants', JSON.stringify(this.state.participants));
+            localStorage.setItem('manneteilt_participants', JSON.stringify(this.state.participants));
         } else if (type === 'expenses') {
-            localStorage.setItem('manneteil_expenses', JSON.stringify(this.state.expenses));
+            localStorage.setItem('manneteilt_expenses', JSON.stringify(this.state.expenses));
         }
     }
 
@@ -507,8 +512,24 @@ class ManneTeiltApp {
         const sessionId = params.get('session');
         
         if (sessionId) {
-            await this.loadSession(sessionId);
-            window.history.replaceState({}, '', window.location.pathname);
+            const success = await this.loadSession(sessionId);
+            // BUG FIX 2: Only clean URL AFTER successful load
+            if (success) {
+                window.history.replaceState({}, '', window.location.pathname);
+            }
+        } else {
+            // BUG FIX 1: Check localStorage for existing session
+            const saved = localStorage.getItem('manneteilt_session');
+            if (saved) {
+                this.state.session = JSON.parse(saved);
+                this.state.participants = JSON.parse(localStorage.getItem('manneteilt_participants') || '[]');
+                this.state.expenses = JSON.parse(localStorage.getItem('manneteilt_expenses') || '[]');
+                
+                // Try to refresh from Supabase
+                if (this.state.supabaseClient && this.state.session) {
+                    await this.loadData();
+                }
+            }
         }
     }
 
@@ -517,13 +538,16 @@ class ManneTeiltApp {
     // ============================================
 
     render() {
+        // BUG FIX 1: Toggle "Neue Reise" button visibility
         if (this.state.session) {
             this.elements.sessionName.textContent = this.state.session.name;
             this.elements.sessionInfo.classList.remove('hidden');
             this.elements.shareBtn.classList.remove('hidden');
+            this.elements.newSessionBtn.classList.add('hidden');
         } else {
             this.elements.sessionInfo.classList.add('hidden');
             this.elements.shareBtn.classList.add('hidden');
+            this.elements.newSessionBtn.classList.remove('hidden');
         }
 
         this.renderParticipants();
@@ -654,9 +678,13 @@ document.addEventListener('DOMContentLoaded', () => {
     app = new ManneTeiltApp();
     window.app = app;
     
-    app.loadFromURL().then(() => {
+    // Show hint after init completes
+    app.init.then = app.init; // noop, init is already running
+    
+    // Check after init if no session loaded
+    setTimeout(() => {
         if (!app.state.session) {
             app.showToast('💡 Tippe "Neue Reise starten" um anzufangen — ManneTeilt');
         }
-    });
+    }, 1500);
 });
