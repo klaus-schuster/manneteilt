@@ -607,7 +607,11 @@ class ManneTeiltApp {
     }
 
     updateUIState(state) {
-        const sections = ['sessionSection', 'participantsSection', 'expensesSection', 'balanceSection'];
+        // sessionSection IMMER sichtbar — da ist der "Neue Reise" Button
+        this.elements.sessionSection.classList.remove('hidden');
+    
+        // Andere Sections nur bei aktiver Session zeigen
+        const sections = ['participantsSection', 'expensesSection', 'balanceSection'];
         sections.forEach(sec => {
             const el = this.elements[sec];
             if (el) {
