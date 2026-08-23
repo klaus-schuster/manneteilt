@@ -6,29 +6,26 @@
     <meta name="theme-color" content="#6d4aff">
     <title>ManneTeilt</title>
     
-    <!-- PWA Manifest -->
     <link rel="manifest" href="manifest.json">
     <link rel="stylesheet" href="styles.css">
     
-    <!-- Supabase CDN -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     
-    <!-- iOS PWA Meta -->
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="ManneTeilt">
 </head>
 <body>
     <div id="app">
-        <!-- Header -->
         <header class="header">
             <h1>💸 ManneTeilt</h1>
-            <button id="settingsBtn" class="icon-btn" aria-label="Einstellungen">⚙️</button>
+            <div class="header-actions">
+                <button id="shareBtn" class="icon-btn hidden" aria-label="Link kopieren" title="Reise-Link kopieren">🔗</button>
+                <button id="settingsBtn" class="icon-btn" aria-label="Einstellungen">⚙️</button>
+            </div>
         </header>
 
-        <!-- Main Content -->
         <main class="main">
-            <!-- Session Select / Create -->
             <section id="sessionSection" class="section">
                 <h2>Aktuelle Reise</h2>
                 <div id="sessionInfo" class="card hidden">
@@ -38,31 +35,38 @@
                 <button id="newSessionBtn" class="btn btn-primary">Neue Reise starten</button>
             </section>
 
-            <!-- Participants -->
             <section id="participantsSection" class="section hidden">
-                <h2>Teilnehmer</h2>
-                <div id="participantsList" class="list"></div>
-                <form id="addParticipantForm" class="form-inline">
-                    <input type="text" id="participantName" placeholder="Name" required>
-                    <button type="submit" class="btn btn-sm">+</button>
-                </form>
+                <div class="section-header">
+                    <h2>Teilnehmer</h2>
+                    <span id="participantCount" class="badge hidden"></span>
+                </div>
+                <!-- Expandable view (when no expenses) -->
+                <div id="participantsListExpanded">
+                    <div id="participantsList" class="list"></div>
+                    <form id="addParticipantForm" class="form-inline">
+                        <input type="text" id="participantName" placeholder="Name" required>
+                        <button type="submit" class="btn btn-sm">+</button>
+                    </form>
+                </div>
+                <!-- Compact view (when expenses exist) -->
+                <div id="participantsCompact" class="hidden">
+                    <div id="participantsChips" class="chips-container"></div>
+                    <button id="toggleParticipantsBtn" class="btn-text">Teilnehmer verwalten ▾</button>
+                </div>
             </section>
 
-            <!-- Expenses -->
             <section id="expensesSection" class="section hidden">
                 <h2>Ausgaben</h2>
                 <div id="expensesList" class="list"></div>
                 <button id="addExpenseBtn" class="btn btn-full btn-primary">➕ Neue Ausgabe</button>
             </section>
 
-            <!-- Balance -->
             <section id="balanceSection" class="section hidden">
                 <h2>Wer schuldet wem?</h2>
                 <div id="balanceList" class="cards-grid"></div>
             </section>
         </main>
 
-        <!-- Expense Modal -->
         <dialog id="expenseModal" class="modal">
             <form id="expenseForm" method="dialog">
                 <h3>Neue Ausgabe</h3>
@@ -87,7 +91,6 @@
             </form>
         </dialog>
 
-        <!-- Settings Modal -->
         <dialog id="settingsModal" class="modal">
             <form id="settingsForm" method="dialog">
                 <h3>Einstellungen</h3>
@@ -95,8 +98,8 @@
                 <label>Supabase URL:</label>
                 <input type="text" id="supabaseUrl" placeholder="https://xxxxx.supabase.co">
                 
-                <label>Supabase Anon Key:</label>
-                <input type="text" id="supabaseKey" placeholder="eyJhbGc...">
+                <label>Supabase Key:</label>
+                <input type="text" id="supabaseKey" placeholder="sb_publishable_...">
                 
                 <label>Reise ID (optional):</label>
                 <input type="text" id="sessionIdInput" placeholder="UUID oder leer für neu">
@@ -108,7 +111,6 @@
             </form>
         </dialog>
 
-        <!-- Toast Notification -->
         <div id="toast" class="toast hidden"></div>
     </div>
 
