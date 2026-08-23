@@ -569,4 +569,90 @@ class ManneTeiltApp {
 
         // Expenses List
         if (this.elements.expensesList) {
-            this.elements.expensesList.
+            this.elements.expensesList.innerHTML = this.state.expenses.length
+                ? this.state.expenses.map(e => {
+                    const payer = this.state.participants.find(p => p.id === e.payer_id);
+                    return `
+                        <div class="list-item" onclick="app.openExpenseModal('${e.id}')">
+                            <div>
+                                <strong>${e.amount.toFixed(2)} €</strong>
+                                <small>von ${payer?.name || '?'}</small>
+                                ${e.note ? `<br><span class="note">${e.note}</span>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('')
+                : '<p class="empty">Noch keine Ausgaben</p>';
+        }
+
+        // Balance Section
+        if (this.elements.balanceList) {
+            const balances = this.calculateBalances();
+            const settlements = this.simplifyDebts(balances);
+            
+            if (settlements.length === 0) {
+                this.elements.balanceList.innerHTML = '<div class="card"><p>🎉 Alles ausgeglichen — Manne ist zufrieden!</p></div>';
+            } else {
+                this.elements.balanceList.innerHTML = settlements.map(s => `
+                    <div class="card settlement-card">
+                        <div class="settlement-arrow">${s.from} ➝ ${s.to}</div>
+                        <div class="settlement-amount">${s.amount.toFixed(2)} €</div>
+                    </div>
+                `).join('');
+            }
+        }
+
+        // Show/hide sections based on state
+        this.updateUIState(this.state.session ? 'active' : 'idle');
+    }
+
+    updateUIState(state) {
+        const sections = ['sessionSection', 'participantsSection', 'expensesSection', 'balanceSection'];
+        sections.forEach(sec => {
+            const el = this.elements[sec];
+            if (el) {
+                el.classList.toggle('hidden', state !== 'active');
+            }
+        });
+    }
+
+    // ============================================
+    // MODALS & TOAST
+    // ============================================
+
+    openSettings() {
+        this.elements.settingsModal.show();
+    }
+
+    showToast(message, type = 'success') {
+        const toast = this.elements.toast;
+        toast.textContent = message;
+        toast.className = `toast ${type}`;
+        toast.classList.remove('hidden');
+        
+        setTimeout(() => {
+            toast.classList.add('hidden');
+        }, 3000);
+    }
+}
+
+// ============================================
+// MANNETEILT APP INIT
+// ============================================
+
+let app;
+
+document.addEventListener('DOMContentLoaded', () => {
+    app = new ManneTeiltApp();
+    
+    // Check for URL session param
+    app.loadFromURL().then(() => {
+        if (!app.state.session) {
+            app.showToast('💡 Tippe "Neue Reise starten" um anzufangen — ManneTeilt');
+        }
+    });
+});
+
+// Global helper for inline onclick handlers
+window.app = null;
+setTimeout(() => { window.app = app; }, 100);
