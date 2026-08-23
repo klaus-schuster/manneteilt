@@ -73,7 +73,8 @@
                 <select id="payerSelect" required></select>
                 
                 <label>Betrag (€):</label>
-                <input type="number" id="expenseAmount" step="0.01" min="0.01" required>
+                <!-- NEU: -->
+                <input type="number" id="expenseAmount" step="0.01" min="0.01" inputmode="decimal" required>
                 
                 <label>Für wen? (alle ausgewählt):</label>
                 <div id="splitParticipants" class="checkbox-group"></div>
