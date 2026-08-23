@@ -21,7 +21,6 @@
             <h1>💸 ManneTeilt</h1>
             <div class="header-actions">
                 <button id="shareBtn" class="icon-btn hidden" aria-label="Link kopieren" title="Reise-Link kopieren">🔗</button>
-                <button id="settingsBtn" class="icon-btn" aria-label="Einstellungen">⚙️</button>
             </div>
         </header>
 
@@ -40,7 +39,6 @@
                     <h2>Teilnehmer</h2>
                     <span id="participantCount" class="badge hidden"></span>
                 </div>
-                <!-- Expandable view (when no expenses) -->
                 <div id="participantsListExpanded">
                     <div id="participantsList" class="list"></div>
                     <form id="addParticipantForm" class="form-inline">
@@ -48,7 +46,6 @@
                         <button type="submit" class="btn btn-sm">+</button>
                     </form>
                 </div>
-                <!-- Compact view (when expenses exist) -->
                 <div id="participantsCompact" class="hidden">
                     <div id="participantsChips" class="chips-container"></div>
                     <button id="toggleParticipantsBtn" class="btn-text">Teilnehmer verwalten ▾</button>
@@ -86,26 +83,6 @@
                 
                 <div class="modal-actions">
                     <button type="button" id="deleteExpenseBtn" class="btn btn-danger">Löschen</button>
-                    <button type="submit" class="btn btn-primary">Speichern</button>
-                </div>
-            </form>
-        </dialog>
-
-        <dialog id="settingsModal" class="modal">
-            <form id="settingsForm" method="dialog">
-                <h3>Einstellungen</h3>
-                
-                <label>Supabase URL:</label>
-                <input type="text" id="supabaseUrl" placeholder="https://xxxxx.supabase.co">
-                
-                <label>Supabase Key:</label>
-                <input type="text" id="supabaseKey" placeholder="sb_publishable_...">
-                
-                <label>Reise ID (optional):</label>
-                <input type="text" id="sessionIdInput" placeholder="UUID oder leer für neu">
-                
-                <div class="modal-actions">
-                    <button type="button" id="testConnectionBtn" class="btn btn-secondary">Verbindung testen</button>
                     <button type="submit" class="btn btn-primary">Speichern</button>
                 </div>
             </form>
