@@ -361,6 +361,10 @@ class ManneTeiltApp {
         this.persistData('expenses');
         this.render();
 
+        // In saveExpense(), nach this.render():
+        this.state.participantsExpanded = false;
+        this.renderParticipants();
+
         try {
             const table = this.state.supabaseClient.from('expenses');
             await (this.elements.expenseId.value 
