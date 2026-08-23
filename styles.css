@@ -379,3 +379,24 @@ input, select {
     body { max-width: 100%; }
     .modal { width: 95vw; }
 }
+
+/* JOIN SECTION */
+.join-section {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--border);
+}
+
+.join-label {
+    font-size: 0.85rem;
+    color: var(--text-light);
+    margin-bottom: 0.5rem;
+    text-align: center;
+}
+
+#sessionCodeInput {
+    text-transform: uppercase;
+    letter-spacing: 0.25rem;
+    font-weight: 600;
+    text-align: center;
+}
