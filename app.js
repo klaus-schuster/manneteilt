@@ -1,5 +1,5 @@
 // ============================================
-// MANNETEILT - Core Application v4
+// MANNETEILT - Core Application v5
 // "Manne teilt, alle wissen Bescheid"
 // ============================================
 
@@ -16,7 +16,6 @@ class ManneTeiltApp {
             supabaseClient: null,
             participantsExpanded: false
         };
-
         this.elements = {};
         this.init();
     }
@@ -26,10 +25,7 @@ class ManneTeiltApp {
         this.bindEvents();
         await this.registerSW();
         this.initSupabase();
-        
-        // BUG FIX 2: loadFromURL INSIDE init, after Supabase is ready
         await this.loadFromURL();
-        
         this.render();
     }
 
@@ -41,6 +37,9 @@ class ManneTeiltApp {
             syncStatus: document.getElementById('syncStatus'),
             newSessionBtn: document.getElementById('newSessionBtn'),
             shareBtn: document.getElementById('shareBtn'),
+            joinForm: document.getElementById('joinForm'),
+            sessionCodeInput: document.getElementById('sessionCodeInput'),
+            joinSection: document.getElementById('joinSection'),
             participantsSection: document.getElementById('participantsSection'),
             participantsList: document.getElementById('participantsList'),
             participantsListExpanded: document.getElementById('participantsListExpanded'),
@@ -70,18 +69,18 @@ class ManneTeiltApp {
     bindEvents() {
         this.elements.newSessionBtn.addEventListener('click', () => this.createSession());
         this.elements.shareBtn.addEventListener('click', () => this.copyShareLink());
-
+        this.elements.joinForm.addEventListener('submit', (e) => {
+            e.preventDefault();
+            this.joinByCode(this.elements.sessionCodeInput.value);
+        });
         this.elements.addParticipantForm.addEventListener('submit', (e) => {
             e.preventDefault();
             this.addParticipant(this.elements.participantName.value.trim());
         });
-
         this.elements.toggleParticipantsBtn.addEventListener('click', () => this.toggleParticipantsExpand());
-
         this.elements.addExpenseBtn.addEventListener('click', () => this.openExpenseModal());
         this.elements.expenseForm.addEventListener('submit', (e) => this.saveExpense(e));
         this.elements.deleteExpenseBtn.addEventListener('click', () => this.deleteExpense());
-
         window.addEventListener('online', () => this.updateConnection(true));
         window.addEventListener('offline', () => this.updateConnection(false));
     }
@@ -97,10 +96,6 @@ class ManneTeiltApp {
         }
     }
 
-    // ============================================
-    // SUPABASE
-    // ============================================
-
     initSupabase() {
         const { createClient } = supabase;
         this.state.supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -115,38 +110,80 @@ class ManneTeiltApp {
         }
     }
 
-    // ============================================
-    // SESSION MANAGEMENT
-    // ============================================
+    generateSessionCode() {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let code = '';
+        for (let i = 0; i < 6; i++) {
+            code += chars[Math.floor(Math.random() * chars.length)];
+        }
+        return code;
+    }
 
     async createSession() {
         const name = prompt('Reisename (z.B. "Spanien Urlaub 2026"):');
         if (!name) return;
 
+        const code = this.generateSessionCode();
         const session = {
             id: crypto.randomUUID(),
             name: name,
+            code: code,
             createdAt: new Date().toISOString()
         };
 
-        localStorage.setItem('manneteilt_session', JSON.stringify(session));
+        localStorage.setItem('manneteil_session', JSON.stringify(session));
         this.state.session = session;
-        
+
         try {
-            await this.state.supabaseClient
-                .from('sessions')
-                .insert([{ 
-                    id: session.id, 
-                    name: session.name, 
-                    created_at: session.createdAt 
-                }]);
+            await this.state.supabaseClient.from('sessions').insert([{
+                id: session.id,
+                name: session.name,
+                code: session.code,
+                created_at: session.createdAt
+            }]);
         } catch (err) {
             console.error('Session sync failed:', err);
         }
 
-        this.showToast(`🎉 Reise "${name}" gestartet — Manne teilt!`);
+        this.showToast(`🎉 Reise "${name}" gestartet! Code: ${code}`);
         this.render();
         this.copyShareLink();
+    }
+
+    async joinByCode(code) {
+        code = code.toUpperCase().trim();
+        if (code.length !== 6) {
+            this.showToast('⚠️ Code muss 6 Zeichen lang sein', 'error');
+            return;
+        }
+
+        try {
+            const { data, error } = await this.state.supabaseClient
+                .from('sessions')
+                .select('*')
+                .eq('code', code)
+                .single();
+
+            if (error || !data) {
+                this.showToast('❌ Keine Reise mit diesem Code gefunden', 'error');
+                return;
+            }
+
+            this.state.session = {
+                id: data.id,
+                name: data.name,
+                code: data.code,
+                createdAt: data.created_at
+            };
+            localStorage.setItem('manneteil_session', JSON.stringify(this.state.session));
+            await this.loadData();
+
+            this.showToast(`📥 Reise "${data.name}" beigetreten!`);
+            this.render();
+        } catch (err) {
+            console.error('Join failed:', err);
+            this.showToast('❌ Fehler beim Beitreten', 'error');
+        }
     }
 
     async loadSession(sessionId) {
@@ -158,8 +195,13 @@ class ManneTeiltApp {
                 .single();
 
             if (!error && data) {
-                this.state.session = { id: data.id, name: data.name, createdAt: data.created_at };
-                localStorage.setItem('manneteilt_session', JSON.stringify(this.state.session));
+                this.state.session = {
+                    id: data.id,
+                    name: data.name,
+                    code: data.code,
+                    createdAt: data.created_at
+                };
+                localStorage.setItem('manneteil_session', JSON.stringify(this.state.session));
                 await this.loadData();
                 this.showToast('📥 Daten geladen — ManneTeilt');
                 return true;
@@ -168,18 +210,16 @@ class ManneTeiltApp {
             console.error('Load from Supabase failed:', err);
         }
 
-        // Fallback: localStorage
-        const saved = localStorage.getItem('manneteilt_session');
+        const saved = localStorage.getItem('manneteil_session');
         if (saved) {
             const localSession = JSON.parse(saved);
             if (localSession.id === sessionId) {
                 this.state.session = localSession;
-                this.state.participants = JSON.parse(localStorage.getItem('manneteilt_participants') || '[]');
-                this.state.expenses = JSON.parse(localStorage.getItem('manneteilt_expenses') || '[]');
+                this.state.participants = JSON.parse(localStorage.getItem('manneteil_participants') || '[]');
+                this.state.expenses = JSON.parse(localStorage.getItem('manneteil_expenses') || '[]');
                 return true;
             }
         }
-
         return false;
     }
 
@@ -218,13 +258,8 @@ class ManneTeiltApp {
                 created_at: e.created_at
             }));
         }
-
         this.render();
     }
-
-    // ============================================
-    // PARTICIPANTS
-    // ============================================
 
     async addParticipant(name) {
         if (!name) return;
@@ -239,16 +274,14 @@ class ManneTeiltApp {
         this.state.participants.push(participant);
         this.persistData('participants');
         this.render();
-        
+
         try {
-            await this.state.supabaseClient
-                .from('participants')
-                .insert([{
-                    id: participant.id,
-                    session_id: participant.session_id,
-                    name: participant.name,
-                    created_at: participant.created_at
-                }]);
+            await this.state.supabaseClient.from('participants').insert([{
+                id: participant.id,
+                session_id: participant.session_id,
+                name: participant.name,
+                created_at: participant.created_at
+            }]);
         } catch (err) {
             console.error('Participant sync failed:', err);
         }
@@ -258,7 +291,7 @@ class ManneTeiltApp {
     }
 
     async deleteParticipant(id) {
-        const hasExpenses = this.state.expenses.some(e => 
+        const hasExpenses = this.state.expenses.some(e =>
             e.payer_id === id || e.split_among_ids?.includes(id)
         );
 
@@ -268,7 +301,7 @@ class ManneTeiltApp {
         }
 
         if (!confirm('Teilnehmer löschen?')) return;
-        
+
         this.state.participants = this.state.participants.filter(p => p.id !== id);
         this.persistData('participants');
         this.render();
@@ -286,10 +319,6 @@ class ManneTeiltApp {
         this.state.participantsExpanded = !this.state.participantsExpanded;
         this.renderParticipants();
     }
-
-    // ============================================
-    // EXPENSES
-    // ============================================
 
     openExpenseModal(expenseId = null) {
         if (this.state.participants.length === 0) {
@@ -315,7 +344,6 @@ class ManneTeiltApp {
         this.elements.payerSelect.innerHTML = this.state.participants
             .map(p => `<option value="${p.id}">${p.name}</option>`).join('');
 
-        // BUG FIX 3: showModal() instead of show() for proper modal behavior
         this.elements.expenseModal.showModal();
     }
 
@@ -361,13 +389,12 @@ class ManneTeiltApp {
         this.persistData('expenses');
         this.render();
 
-        // In saveExpense(), nach this.render():
         this.state.participantsExpanded = false;
         this.renderParticipants();
 
         try {
             const table = this.state.supabaseClient.from('expenses');
-            await (this.elements.expenseId.value 
+            await (this.elements.expenseId.value
                 ? table.upsert([{
                     id: expenseData.id,
                     session_id: expenseData.session_id,
@@ -376,7 +403,7 @@ class ManneTeiltApp {
                     split_among_ids: expenseData.split_among_ids,
                     note: expenseData.note,
                     created_at: expenseData.created_at
-                }]) 
+                }])
                 : table.insert([{
                     id: expenseData.id,
                     session_id: expenseData.session_id,
@@ -413,13 +440,8 @@ class ManneTeiltApp {
         this.showToast('🗑️ Ausgabe gelöscht');
     }
 
-    // ============================================
-    // BALANCE CALCULATION
-    // ============================================
-
     calculateBalances() {
         const balances = {};
-        
         this.state.participants.forEach(p => {
             balances[p.id] = { ...p, net: 0 };
         });
@@ -427,13 +449,12 @@ class ManneTeiltApp {
         this.state.expenses.forEach(expense => {
             const shareCount = expense.split_among_ids.length;
             if (shareCount === 0) return;
-            
             const share = expense.amount / shareCount;
-            
+
             if (balances[expense.payer_id]) {
                 balances[expense.payer_id].net += expense.amount;
             }
-            
+
             expense.split_among_ids.forEach(splitId => {
                 if (balances[splitId]) {
                     balances[splitId].net -= share;
@@ -450,16 +471,14 @@ class ManneTeiltApp {
     simplifyDebts(balances) {
         const debtors = balances.filter(b => b.net < -0.01).sort((a, b) => a.net - b.net);
         const creditors = balances.filter(b => b.net > 0.01).sort((a, b) => b.net - a.net);
-
         const settlements = [];
 
         let i = 0, j = 0;
         while (i < debtors.length && j < creditors.length) {
             const debtor = debtors[i];
             const creditor = creditors[j];
-            
             const amount = Math.min(Math.abs(debtor.net), creditor.net);
-            
+
             if (amount > 0.01) {
                 settlements.push({
                     from: debtor.name,
@@ -474,25 +493,16 @@ class ManneTeiltApp {
             if (Math.abs(debtor.net) < 0.01) i++;
             if (creditor.net < 0.01) j++;
         }
-
         return settlements;
     }
 
-    // ============================================
-    // PERSISTENCE
-    // ============================================
-
     persistData(type) {
         if (type === 'participants') {
-            localStorage.setItem('manneteilt_participants', JSON.stringify(this.state.participants));
+            localStorage.setItem('manneteil_participants', JSON.stringify(this.state.participants));
         } else if (type === 'expenses') {
-            localStorage.setItem('manneteilt_expenses', JSON.stringify(this.state.expenses));
+            localStorage.setItem('manneteil_expenses', JSON.stringify(this.state.expenses));
         }
     }
-
-    // ============================================
-    // SHARE
-    // ============================================
 
     getShareLink() {
         if (!this.state.session) return '';
@@ -502,34 +512,34 @@ class ManneTeiltApp {
 
     copyShareLink() {
         const link = this.getShareLink();
-        if (!link) return;
+        const code = this.state.session?.code || '';
+        const shareText = code
+            ? `ManneTeilt — Reise "${this.state.session.name}"\nCode: ${code}\nOder Link: ${link}`
+            : link;
 
-        navigator.clipboard.writeText(link).then(() => {
-            this.showToast('🔗 Link kopiert! Teile ihn mit deiner Gruppe — ManneTeilt');
+        navigator.clipboard.writeText(shareText).then(() => {
+            this.showToast('🔗 Link + Code kopiert!');
         }).catch(() => {
-            this.showToast('📋 Link: ' + link);
+            this.showToast('📋 ' + shareText);
         });
     }
 
     async loadFromURL() {
         const params = new URLSearchParams(window.location.search);
         const sessionId = params.get('session');
-        
+
         if (sessionId) {
             const success = await this.loadSession(sessionId);
-            // BUG FIX 2: Only clean URL AFTER successful load
             if (success) {
                 window.history.replaceState({}, '', window.location.pathname);
             }
         } else {
-            // BUG FIX 1: Check localStorage for existing session
-            const saved = localStorage.getItem('manneteilt_session');
+            const saved = localStorage.getItem('manneteil_session');
             if (saved) {
                 this.state.session = JSON.parse(saved);
-                this.state.participants = JSON.parse(localStorage.getItem('manneteilt_participants') || '[]');
-                this.state.expenses = JSON.parse(localStorage.getItem('manneteilt_expenses') || '[]');
-                
-                // Try to refresh from Supabase
+                this.state.participants = JSON.parse(localStorage.getItem('manneteil_participants') || '[]');
+                this.state.expenses = JSON.parse(localStorage.getItem('manneteil_expenses') || '[]');
+
                 if (this.state.supabaseClient && this.state.session) {
                     await this.loadData();
                 }
@@ -537,27 +547,23 @@ class ManneTeiltApp {
         }
     }
 
-    // ============================================
-    // RENDERING
-    // ============================================
-
     render() {
-        // BUG FIX 1: Toggle "Neue Reise" button visibility
         if (this.state.session) {
             this.elements.sessionName.textContent = this.state.session.name;
             this.elements.sessionInfo.classList.remove('hidden');
             this.elements.shareBtn.classList.remove('hidden');
             this.elements.newSessionBtn.classList.add('hidden');
+            this.elements.joinSection.classList.add('hidden');
         } else {
             this.elements.sessionInfo.classList.add('hidden');
             this.elements.shareBtn.classList.add('hidden');
             this.elements.newSessionBtn.classList.remove('hidden');
+            this.elements.joinSection.classList.remove('hidden');
         }
 
         this.renderParticipants();
         this.renderExpenses();
         this.renderBalance();
-
         this.updateUIState(this.state.session ? 'active' : 'idle');
     }
 
@@ -574,15 +580,12 @@ class ManneTeiltApp {
         if (hasExpenses && !this.state.participantsExpanded) {
             this.elements.participantsListExpanded.classList.add('hidden');
             this.elements.participantsCompact.classList.remove('hidden');
-            
             this.elements.participantsChips.innerHTML = this.state.participants
                 .map(p => `<span class="chip">${p.name}</span>`).join('');
-            
             this.elements.toggleParticipantsBtn.textContent = 'Teilnehmer verwalten ▾';
         } else if (hasExpenses && this.state.participantsExpanded) {
             this.elements.participantsListExpanded.classList.remove('hidden');
             this.elements.participantsCompact.classList.add('hidden');
-            
             this.elements.participantsList.innerHTML = this.state.participants.length
                 ? this.state.participants.map(p => `
                     <div class="list-item">
@@ -591,12 +594,10 @@ class ManneTeiltApp {
                     </div>
                 `).join('')
                 : '<p class="empty">Noch keine Teilnehmer</p>';
-            
             this.elements.toggleParticipantsBtn.textContent = 'Einklappen ▴';
         } else {
             this.elements.participantsListExpanded.classList.remove('hidden');
             this.elements.participantsCompact.classList.add('hidden');
-            
             this.elements.participantsList.innerHTML = this.state.participants.length
                 ? this.state.participants.map(p => `
                     <div class="list-item">
@@ -631,13 +632,13 @@ class ManneTeiltApp {
         if (this.elements.balanceList) {
             const balances = this.calculateBalances();
             const settlements = this.simplifyDebts(balances);
-            
+
             if (settlements.length === 0) {
                 this.elements.balanceList.innerHTML = '<div class="card"><p>🎉 Alles ausgeglichen — Manne ist zufrieden!</p></div>';
             } else {
                 this.elements.balanceList.innerHTML = settlements.map(s => `
                     <div class="card settlement-card">
-                        <div class="settlement-arrow">${s.from} ➝ ${s.to}</div>
+                        <div class="settlement-arrow">${s.from} → ${s.to}</div>
                         <div class="settlement-amount">${s.amount.toFixed(2)} €</div>
                     </div>
                 `).join('');
@@ -656,36 +657,22 @@ class ManneTeiltApp {
         });
     }
 
-    // ============================================
-    // TOAST
-    // ============================================
-
     showToast(message, type = 'success') {
         const toast = this.elements.toast;
         toast.textContent = message;
         toast.className = `toast ${type}`;
         toast.classList.remove('hidden');
-        
         setTimeout(() => {
             toast.classList.add('hidden');
         }, 3000);
     }
 }
 
-// ============================================
-// INIT
-// ============================================
-
 let app;
 
 document.addEventListener('DOMContentLoaded', () => {
     app = new ManneTeiltApp();
     window.app = app;
-    
-    // Show hint after init completes
-    app.init.then = app.init; // noop, init is already running
-    
-    // Check after init if no session loaded
     setTimeout(() => {
         if (!app.state.session) {
             app.showToast('💡 Tippe "Neue Reise starten" um anzufangen — ManneTeilt');
