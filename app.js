@@ -1,7 +1,11 @@
 // ============================================
-// MANNETEILT - Core Application v2
+// MANNETEILT - Core Application v3
 // "Manne teilt, alle wissen Bescheid"
 // ============================================
+
+// Supabase Credentials (Frontend-safe with RLS protection)
+const SUPABASE_URL = 'https://gggbybpiostztrddhvgm.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_xGdq57oOwz1u0OvmUuhrpA_-zpgdQqN';
 
 class ManneTeiltApp {
     constructor() {
@@ -9,11 +13,6 @@ class ManneTeiltApp {
             session: null,
             participants: [],
             expenses: [],
-            settings: {
-                supabaseUrl: '',
-                supabaseKey: '',
-                sessionId: ''
-            },
             isConnected: false,
             supabaseClient: null,
             participantsExpanded: false
@@ -25,9 +24,9 @@ class ManneTeiltApp {
 
     async init() {
         this.cacheElements();
-        this.loadSettings();
         this.bindEvents();
         await this.registerSW();
+        this.initSupabase(); // Direct initialization
         this.render();
     }
 
@@ -61,20 +60,12 @@ class ManneTeiltApp {
             splitParticipants: document.getElementById('splitParticipants'),
             expenseNote: document.getElementById('expenseNote'),
             deleteExpenseBtn: document.getElementById('deleteExpenseBtn'),
-            settingsModal: document.getElementById('settingsModal'),
-            settingsForm: document.getElementById('settingsForm'),
-            supabaseUrl: document.getElementById('supabaseUrl'),
-            supabaseKey: document.getElementById('supabaseKey'),
-            sessionIdInput: document.getElementById('sessionIdInput'),
-            testConnectionBtn: document.getElementById('testConnectionBtn'),
-            settingsBtn: document.getElementById('settingsBtn'),
             toast: document.getElementById('toast')
         };
     }
 
     bindEvents() {
         this.elements.newSessionBtn.addEventListener('click', () => this.createSession());
-        
         this.elements.shareBtn.addEventListener('click', () => this.copyShareLink());
 
         this.elements.addParticipantForm.addEventListener('submit', (e) => {
@@ -87,13 +78,6 @@ class ManneTeiltApp {
         this.elements.addExpenseBtn.addEventListener('click', () => this.openExpenseModal());
         this.elements.expenseForm.addEventListener('submit', (e) => this.saveExpense(e));
         this.elements.deleteExpenseBtn.addEventListener('click', () => this.deleteExpense());
-
-        this.elements.settingsBtn.addEventListener('click', () => this.openSettings());
-        this.elements.settingsForm.addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.saveSettings();
-        });
-        this.elements.testConnectionBtn.addEventListener('click', () => this.testConnection());
 
         window.addEventListener('online', () => this.updateConnection(true));
         window.addEventListener('offline', () => this.updateConnection(false));
@@ -111,69 +95,15 @@ class ManneTeiltApp {
     }
 
     // ============================================
-    // SETTINGS
-    // ============================================
-    
-    loadSettings() {
-        const saved = localStorage.getItem('manneteilt_settings');
-        if (saved) {
-            this.state.settings = JSON.parse(saved);
-            this.elements.supabaseUrl.value = this.state.settings.supabaseUrl;
-            this.elements.supabaseKey.value = this.state.settings.supabaseKey;
-            this.elements.sessionIdInput.value = this.state.settings.sessionId;
-            
-            if (this.state.settings.supabaseUrl && this.state.settings.supabaseKey) {
-                this.initSupabase();
-            }
-        }
-    }
-
-    saveSettings() {
-        this.state.settings = {
-            supabaseUrl: this.elements.supabaseUrl.value.trim(),
-            supabaseKey: this.elements.supabaseKey.value.trim(),
-            sessionId: this.elements.sessionIdInput.value.trim()
-        };
-        localStorage.setItem('manneteilt_settings', JSON.stringify(this.state.settings));
-        this.showToast('⚙️ Einstellungen gespeichert');
-        this.elements.settingsModal.close();
-        
-        if (this.state.settings.supabaseUrl && this.state.settings.supabaseKey) {
-            this.initSupabase();
-        }
-    }
-
-    // ============================================
-    // SUPABASE
+    // SUPABASE INITIALIZATION (NO SETTINGS UI)
     // ============================================
 
     initSupabase() {
         const { createClient } = supabase;
-        this.state.supabaseClient = createClient(
-            this.state.settings.supabaseUrl,
-            this.state.settings.supabaseKey
-        );
+        this.state.supabaseClient = createClient(SUPABASE_URL, SUPABASE_KEY);
         
         this.showToast('🔌 Supabase verbunden!');
         this.updateConnection(true);
-        
-        if (this.state.settings.sessionId) {
-            this.loadSession(this.state.settings.sessionId);
-        }
-    }
-
-    async testConnection() {
-        try {
-            const { data, error } = await this.state.supabaseClient
-                .from('sessions')
-                .select('id')
-                .limit(1);
-            
-            if (error) throw error;
-            this.showToast('✅ Verbindung erfolgreich!');
-        } catch (err) {
-            this.showToast(`❌ Fehler: ${err.message}`, 'error');
-        }
     }
 
     updateConnection(connected) {
@@ -201,18 +131,16 @@ class ManneTeiltApp {
         localStorage.setItem('manneteilt_session', JSON.stringify(session));
         this.state.session = session;
         
-        if (this.state.supabaseClient) {
-            try {
-                await this.state.supabaseClient
-                    .from('sessions')
-                    .insert([{ 
-                        id: session.id, 
-                        name: session.name, 
-                        created_at: session.createdAt 
-                    }]);
-            } catch (err) {
-                console.error('Session sync failed:', err);
-            }
+        try {
+            await this.state.supabaseClient
+                .from('sessions')
+                .insert([{ 
+                    id: session.id, 
+                    name: session.name, 
+                    created_at: session.createdAt 
+                }]);
+        } catch (err) {
+            console.error('Session sync failed:', err);
         }
 
         this.showToast(`🎉 Reise "${name}" gestartet — Manne teilt!`);
@@ -222,31 +150,29 @@ class ManneTeiltApp {
     }
 
     async loadSession(sessionId) {
-        if (this.state.supabaseClient) {
-            try {
-                const { data, error } = await this.state.supabaseClient
-                    .from('sessions')
-                    .select('*')
-                    .eq('id', sessionId)
-                    .single();
+        try {
+            const { data, error } = await this.state.supabaseClient
+                .from('sessions')
+                .select('*')
+                .eq('id', sessionId)
+                .single();
 
-                if (!error && data) {
-                    this.state.session = { id: data.id, name: data.name, createdAt: data.created_at };
-                    localStorage.setItem('manneteilt_session', JSON.stringify(this.state.session));
-                    await this.loadData();
-                    this.showToast('📥 Daten geladen — ManneTeilt');
-                    return;
-                }
-            } catch (err) {
-                console.error('Load from Supabase failed:', err);
+            if (!error && data) {
+                this.state.session = { id: data.id, name: data.name, createdAt: data.created_at };
+                localStorage.setItem('manneteil_session', JSON.stringify(this.state.session));
+                await this.loadData();
+                this.showToast('📥 Daten geladen — ManneTeilt');
+                return;
             }
+        } catch (err) {
+            console.error('Load from Supabase failed:', err);
         }
 
-        const saved = localStorage.getItem('manneteilt_session');
+        const saved = localStorage.getItem('manneteil_session');
         if (saved) {
             this.state.session = JSON.parse(saved);
-            this.state.participants = JSON.parse(localStorage.getItem('manneteilt_participants') || '[]');
-            this.state.expenses = JSON.parse(localStorage.getItem('manneteilt_expenses') || '[]');
+            this.state.participants = JSON.parse(localStorage.getItem('manneteil_participants') || '[]');
+            this.state.expenses = JSON.parse(localStorage.getItem('manneteil_expenses') || '[]');
         }
 
         this.updateUIState('active');
@@ -256,42 +182,37 @@ class ManneTeiltApp {
     async loadData() {
         if (!this.state.session) return;
 
-        if (this.state.supabaseClient) {
-            const [participantsRes, expensesRes] = await Promise.all([
-                this.state.supabaseClient
-                    .from('participants')
-                    .select('*')
-                    .eq('session_id', this.state.session.id)
-                    .order('created_at'),
-                this.state.supabaseClient
-                    .from('expenses')
-                    .select('*')
-                    .eq('session_id', this.state.session.id)
-                    .order('created_at')
-            ]);
+        const [participantsRes, expensesRes] = await Promise.all([
+            this.state.supabaseClient
+                .from('participants')
+                .select('*')
+                .eq('session_id', this.state.session.id)
+                .order('created_at'),
+            this.state.supabaseClient
+                .from('expenses')
+                .select('*')
+                .eq('session_id', this.state.session.id)
+                .order('created_at')
+        ]);
 
-            if (!participantsRes.error) {
-                this.state.participants = participantsRes.data.map(p => ({
-                    id: p.id,
-                    session_id: p.session_id,
-                    name: p.name,
-                    created_at: p.created_at
-                }));
-            }
-            if (!expensesRes.error) {
-                this.state.expenses = expensesRes.data.map(e => ({
-                    id: e.id,
-                    session_id: e.session_id,
-                    payer_id: e.payer_id,
-                    amount: parseFloat(e.amount),
-                    split_among_ids: e.split_among_ids || [],
-                    note: e.note,
-                    created_at: e.created_at
-                }));
-            }
-        } else {
-            this.state.participants = JSON.parse(localStorage.getItem('manneteilt_participants') || '[]');
-            this.state.expenses = JSON.parse(localStorage.getItem('manneteilt_expenses') || '[]');
+        if (!participantsRes.error) {
+            this.state.participants = participantsRes.data.map(p => ({
+                id: p.id,
+                session_id: p.session_id,
+                name: p.name,
+                created_at: p.created_at
+            }));
+        }
+        if (!expensesRes.error) {
+            this.state.expenses = expensesRes.data.map(e => ({
+                id: e.id,
+                session_id: e.session_id,
+                payer_id: e.payer_id,
+                amount: parseFloat(e.amount),
+                split_among_ids: e.split_among_ids || [],
+                note: e.note,
+                created_at: e.created_at
+            }));
         }
 
         this.render();
@@ -315,19 +236,17 @@ class ManneTeiltApp {
         this.persistData('participants');
         this.render();
         
-        if (this.state.supabaseClient) {
-            try {
-                await this.state.supabaseClient
-                    .from('participants')
-                    .insert([{
-                        id: participant.id,
-                        session_id: participant.session_id,
-                        name: participant.name,
-                        created_at: participant.created_at
-                    }]);
-            } catch (err) {
-                console.error('Participant sync failed:', err);
-            }
+        try {
+            await this.state.supabaseClient
+                .from('participants')
+                .insert([{
+                    id: participant.id,
+                    session_id: participant.session_id,
+                    name: participant.name,
+                    created_at: participant.created_at
+                }]);
+        } catch (err) {
+            console.error('Participant sync failed:', err);
         }
 
         this.elements.participantName.value = '';
@@ -335,7 +254,6 @@ class ManneTeiltApp {
     }
 
     async deleteParticipant(id) {
-        // (c) Block deletion if expenses exist
         const hasExpenses = this.state.expenses.some(e => 
             e.payer_id === id || e.split_among_ids?.includes(id)
         );
@@ -351,8 +269,10 @@ class ManneTeiltApp {
         this.persistData('participants');
         this.render();
 
-        if (this.state.supabaseClient) {
+        try {
             await this.state.supabaseClient.from('participants').delete().eq('id', id);
+        } catch (err) {
+            console.error('Delete participant failed:', err);
         }
 
         this.showToast('🗑️ Teilnehmer entfernt');
@@ -436,7 +356,7 @@ class ManneTeiltApp {
         this.persistData('expenses');
         this.render();
 
-        if (this.state.supabaseClient) {
+        try {
             const table = this.state.supabaseClient.from('expenses');
             await (this.elements.expenseId.value 
                 ? table.upsert([{
@@ -458,6 +378,8 @@ class ManneTeiltApp {
                     created_at: expenseData.created_at
                 }])
             );
+        } catch (err) {
+            console.error('Save expense failed:', err);
         }
 
         this.elements.expenseModal.close();
@@ -472,8 +394,10 @@ class ManneTeiltApp {
         this.persistData('expenses');
         this.render();
 
-        if (this.state.supabaseClient) {
+        try {
             await this.state.supabaseClient.from('expenses').delete().eq('id', id);
+        } catch (err) {
+            console.error('Delete expense failed:', err);
         }
 
         this.elements.expenseModal.close();
@@ -551,19 +475,18 @@ class ManneTeiltApp {
 
     persistData(type) {
         if (type === 'participants') {
-            localStorage.setItem('manneteilt_participants', JSON.stringify(this.state.participants));
+            localStorage.setItem('manneteil_participants', JSON.stringify(this.state.participants));
         } else if (type === 'expenses') {
-            localStorage.setItem('manneteilt_expenses', JSON.stringify(this.state.expenses));
+            localStorage.setItem('manneteil_expenses', JSON.stringify(this.state.expenses));
         }
     }
 
     // ============================================
-    // SHARE — (a) always copyable + (b) correct URL
+    // SHARE
     // ============================================
 
     getShareLink() {
         if (!this.state.session) return '';
-        // (b) Fix: use full pathname to include repository name
         const basePath = window.location.href.split('?')[0].split('#')[0];
         return `${basePath}?session=${this.state.session.id}`;
     }
@@ -594,11 +517,10 @@ class ManneTeiltApp {
     // ============================================
 
     render() {
-        // Session info + share button visibility
         if (this.state.session) {
             this.elements.sessionName.textContent = this.state.session.name;
             this.elements.sessionInfo.classList.remove('hidden');
-            this.elements.shareBtn.classList.remove('hidden'); // (a) always visible when session active
+            this.elements.shareBtn.classList.remove('hidden');
         } else {
             this.elements.sessionInfo.classList.add('hidden');
             this.elements.shareBtn.classList.add('hidden');
@@ -614,7 +536,6 @@ class ManneTeiltApp {
     renderParticipants() {
         const hasExpenses = this.state.expenses.length > 0;
 
-        // Participant count badge
         if (this.state.participants.length > 0) {
             this.elements.participantCount.textContent = `${this.state.participants.length}`;
             this.elements.participantCount.classList.remove('hidden');
@@ -623,7 +544,6 @@ class ManneTeiltApp {
         }
 
         if (hasExpenses && !this.state.participantsExpanded) {
-            // (d) Compact view — chips instead of list
             this.elements.participantsListExpanded.classList.add('hidden');
             this.elements.participantsCompact.classList.remove('hidden');
             
@@ -632,7 +552,6 @@ class ManneTeiltApp {
             
             this.elements.toggleParticipantsBtn.textContent = 'Teilnehmer verwalten ▾';
         } else if (hasExpenses && this.state.participantsExpanded) {
-            // Expanded view — but (c) no delete buttons when expenses exist
             this.elements.participantsListExpanded.classList.remove('hidden');
             this.elements.participantsCompact.classList.add('hidden');
             
@@ -640,17 +559,13 @@ class ManneTeiltApp {
                 ? this.state.participants.map(p => `
                     <div class="list-item">
                         <span>${p.name}</span>
-                        ${!hasExpenses 
-                            ? `<button class="icon-btn danger" onclick="app.deleteParticipant('${p.id}')">✕</button>`
-                            : '<span class="lock-icon">🔒</span>'
-                        }
+                        <span class="lock-icon">🔒</span>
                     </div>
                 `).join('')
                 : '<p class="empty">Noch keine Teilnehmer</p>';
             
             this.elements.toggleParticipantsBtn.textContent = 'Einklappen ▴';
         } else {
-            // Normal view (no expenses) — with delete buttons
             this.elements.participantsListExpanded.classList.remove('hidden');
             this.elements.participantsCompact.classList.add('hidden');
             
@@ -714,12 +629,8 @@ class ManneTeiltApp {
     }
 
     // ============================================
-    // MODALS & TOAST
+    // TOAST
     // ============================================
-
-    openSettings() {
-        this.elements.settingsModal.show();
-    }
 
     showToast(message, type = 'success') {
         const toast = this.elements.toast;
