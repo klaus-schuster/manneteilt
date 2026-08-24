@@ -1,57 +1,47 @@
-const CACHE_NAME = 'manneteilt-v1';
+const CACHE_NAME = 'manneteilt-v6';
+const BASE_PATH = self.location.pathname.replace('/sw.js', '');
 const ASSETS = [
-    '/',
-    '/index.html',
-    '/styles.css',
-    '/app.js',
-    '/manifest.json'
+    BASE_PATH + '/',
+    BASE_PATH + '/index.html',
+    BASE_PATH + '/styles.css',
+    BASE_PATH + '/app.js',
+    BASE_PATH + '/manifest.json'
 ];
 
-// Install SW
 self.addEventListener('install', (event) => {
     event.waitUntil(
-        caches.open(CACHE_NAME)
-            .then((cache) => cache.addAll(ASSETS))
+        caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
     );
     self.skipWaiting();
 });
 
-// Activate SW
 self.addEventListener('activate', (event) => {
     event.waitUntil(
-        caches.keys().then((keys) => 
-            Promise.all(
-                keys.map((key) => {
-                    if (key !== CACHE_NAME) return caches.delete(key);
-                })
-            )
+        caches.keys().then((keys) =>
+            Promise.all(keys.map((key) => {
+                if (key !== CACHE_NAME) return caches.delete(key);
+            }))
         )
     );
     self.clients.claim();
 });
 
-// Fetch: network-first für Supabase API, cache-first für Assets
 self.addEventListener('fetch', (event) => {
     const { request } = event;
     const url = new URL(request.url);
 
     if (url.hostname.includes('supabase')) {
         event.respondWith(
-            fetch(request)
-                .then((response) => {
-                    const responseClone = response.clone();
-                    caches.open(CACHE_NAME).then((cache) => {
-                        cache.put(request, responseClone);
-                    });
-                    return response;
-                })
-                .catch(() => caches.match(request))
+            fetch(request).then((response) => {
+                const clone = response.clone();
+                caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+                return response;
+            }).catch(() => caches.match(request))
         );
         return;
     }
 
     event.respondWith(
-        caches.match(request)
-            .then((cached) => cached || fetch(request))
+        caches.match(request).then((cached) => cached || fetch(request))
     );
 });
