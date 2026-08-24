@@ -86,6 +86,34 @@ class ManneTeiltApp {
         this.elements.toggleAllSplit.addEventListener('click', () => this.toggleAllSplitCheckboxes());
         window.addEventListener('online', () => this.updateConnection(true));
         window.addEventListener('offline', () => this.updateConnection(false));
+        // NEUER BUTTON: New Trip
+        this.elements.newTripBtn.addEventListener('click', () => this.createNewSession());
+        // ... rest ...
+    }
+
+    // NEUE METHODE: createNewSession
+    async createNewSession() {
+        if (!confirm('Aktuelle Reise beenden und neue starten?\nBestehende Daten gehen verloren.')) return;
+
+        // Clear current session
+        this.state.session = null;
+        this.state.participants = [];
+        this.state.expenses = [];
+        
+        // Clear localStorage
+        localStorage.removeItem('manneteil_session');
+        localStorage.removeItem('manneteil_participants');
+        localStorage.removeItem('manneteil_expenses');
+
+        // Render reset
+        this.elements.sessionCodeDisplay.classList.add('hidden');
+        this.elements.shareBtn.classList.remove('hidden');
+        this.elements.newSessionBtn.classList.remove('hidden');
+        this.elements.newTripBtn.classList.add('hidden');
+        this.elements.joinSection.classList.remove('hidden');
+
+        this.render();
+        this.showToast('🗑️ Reise beendet. Neue starten!');
     }
 
     async registerSW() {
@@ -430,7 +458,10 @@ class ManneTeiltApp {
             amount: parseFloat(this.elements.expenseAmount.value),
             split_among_ids: splitIds,
             note: this.elements.expenseNote.value,
-            created_at: new Date().toISOString()
+            // ORIGINAL createdAt behalten bei Edit
+            created_at: this.elements.expenseId.value 
+                ? this.state.expenses.find(e => e.id === this.elements.expenseId.value)?.created_at 
+                : new Date().toISOString()
         };
 
         if (this.elements.expenseId.value) {
@@ -630,9 +661,9 @@ class ManneTeiltApp {
             this.elements.sessionInfo.classList.remove('hidden');
             this.elements.shareBtn.classList.remove('hidden');
             this.elements.newSessionBtn.classList.add('hidden');
+            this.elements.newTripBtn.classList.remove('hidden');
             this.elements.joinSection.classList.add('hidden');
 
-            // Feature 3: Show session code in header
             if (this.state.session.code) {
                 this.elements.sessionCodeDisplay.textContent = `CODE: ${this.state.session.code}`;
                 this.elements.sessionCodeDisplay.classList.remove('hidden');
@@ -641,6 +672,7 @@ class ManneTeiltApp {
             this.elements.sessionInfo.classList.add('hidden');
             this.elements.shareBtn.classList.add('hidden');
             this.elements.newSessionBtn.classList.remove('hidden');
+            this.elements.newTripBtn.classList.add('hidden');
             this.elements.joinSection.classList.remove('hidden');
             this.elements.sessionCodeDisplay.classList.add('hidden');
         }
