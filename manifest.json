@@ -2,22 +2,23 @@
   "name": "ManneTeilt",
   "short_name": "ManneTeilt",
   "description": "Gruppenausgaben splitten ohne Ads — Manne teilt, alle wissen Bescheid",
-  "start_url": "/",
+  "start_url": "/manneteilt/",
+  "scope": "/manneteilt/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#05164d",
+  "theme_color": "#6d4aff",
   "orientation": "portrait",
   "categories": ["finance", "utilities", "productivity"],
   "lang": "de",
   "icons": [
     {
-      "src": "icon-192.png",
+      "src": "/manneteilt/icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "icon-512.png",
+      "src": "/manneteilt/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
