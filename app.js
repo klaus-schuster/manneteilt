@@ -515,9 +515,9 @@ class ManneTeiltApp {
         this.showToast('💰 Ausgabe gespeichert — Manne teilt!');
 
         // SCROLL TO TOP after save
-        setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        }, 300);
+        //setTimeout(() => {
+        //window.scrollTo({ top: 0, behavior: 'smooth' });
+        //}, 300);
     }
 
     async deleteExpense() {
