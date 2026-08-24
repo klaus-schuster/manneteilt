@@ -18,9 +18,12 @@
 <body>
     <div id="app">
         <header class="header">
-            <h1>💸 ManneTeilt</h1>
+            <div class="header-title">
+                <h1>💸 ManneTeilt</h1>
+                <span id="sessionCodeDisplay" class="session-code-badge hidden"></span>
+            </div>
             <div class="header-actions">
-                <button id="shareBtn" class="icon-btn hidden" aria-label="Link kopieren" title="Reise-Link kopieren">🔗</button>
+                <button id="shareBtn" class="icon-btn hidden" aria-label="Link kopieren">🔗</button>
             </div>
         </header>
 
@@ -32,8 +35,6 @@
                     <span id="syncStatus" class="status-badge">offline</span>
                 </div>
                 <button id="newSessionBtn" class="btn btn-primary">Neue Reise starten</button>
-
-                <!-- NEU: Session Code Join -->
                 <div id="joinSection" class="join-section">
                     <p class="join-label">oder Reise-Code eingeben:</p>
                     <form id="joinForm" class="form-inline">
@@ -46,7 +47,6 @@
                         <button type="submit" class="btn btn-sm btn-primary">Beitreten</button>
                     </form>
                 </div>
-                
             </section>
 
             <section id="participantsSection" class="section hidden">
@@ -88,10 +88,12 @@
                 <select id="payerSelect" required></select>
                 
                 <label>Betrag (€):</label>
-                <!-- NEU: -->
                 <input type="number" id="expenseAmount" step="0.01" min="0.01" inputmode="decimal" required>
                 
-                <label>Für wen? (alle ausgewählt):</label>
+                <div class="split-header">
+                    <label>Für wen?</label>
+                    <button type="button" id="toggleAllSplit" class="btn-text">Alle abwählen</button>
+                </div>
                 <div id="splitParticipants" class="checkbox-group"></div>
                 
                 <label>Bemerkung:</label>
