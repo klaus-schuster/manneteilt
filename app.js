@@ -90,14 +90,16 @@ class ManneTeiltApp {
         });
 
         this.elements.toggleParticipantsBtn.addEventListener('click', () => this.toggleParticipantsExpand());
+
         this.elements.addExpenseBtn.addEventListener('click', () => this.openExpenseModal());
         this.elements.expenseForm.addEventListener('submit', (e) => this.saveExpense(e));
         this.elements.deleteExpenseBtn.addEventListener('click', () => this.deleteExpense());
         this.elements.toggleAllSplit.addEventListener('click', () => this.toggleAllSplitCheckboxes());
 
-        window.addEventListener('online', () => this.updateConnection(true));
-        window.addEventListener('offline', () => this.updateConnection(false));
-
+        // ============================================
+        // LIVE AMOUNT FORMATTER (Cent → EUR Anzeige)
+        // ============================================
+        this.rawAmount = '';
         const amountInput = this.elements.expenseAmount;
 
         amountInput.addEventListener('keydown', (e) => {
@@ -107,18 +109,38 @@ class ManneTeiltApp {
         });
 
         amountInput.addEventListener('input', (e) => {
-            let raw = e.target.value.replace(/\D/g, '');
-            if (raw.length === 0) {
-                e.target.value = '';
-                return;
-            }
-            if (raw.length <= 2) {
-                e.target.value = '0.' + raw.padStart(2, '0');
+            const inputChar = e.data || '';
+            if (/^[0-9]$/.test(inputChar)) {
+                this.rawAmount += inputChar;
             } else {
-                e.target.value = raw.slice(0, -2) + '.' + raw.slice(-2);
+                this.rawAmount = e.target.value.replace(/\D/g, '');
+            }
+
+            if (this.rawAmount.length === 0) {
+                e.target.value = '';
+            } else if (this.rawAmount.length <= 2) {
+                e.target.value = '0.' + this.rawAmount.padStart(2, '0');
+            } else {
+                e.target.value = this.rawAmount.slice(0, -2) + '.' + this.rawAmount.slice(-2);
             }
         });
-}
+
+        amountInput.addEventListener('blur', () => {
+            if (this.rawAmount.length === 0) {
+                amountInput.value = '';
+            }
+        });
+
+        this.elements.expenseForm.addEventListener('reset', () => {
+            this.rawAmount = '';
+        });
+
+        // ============================================
+        // ONLINE/OFFLINE STATUS
+        // ============================================
+        window.addEventListener('online', () => this.updateConnection(true));
+        window.addEventListener('offline', () => this.updateConnection(false));
+    }
 
     // NEUE METHODE: createNewSession
     async createNewSession() {
@@ -411,23 +433,29 @@ class ManneTeiltApp {
             const expense = this.state.expenses.find(e => e.id === expenseId);
             this.elements.expenseId.value = expense.id;
             this.elements.payerSelect.value = expense.payer_id;
-            
-            // Euro → Cent → Formatieren
+
+            // EUR → Cent → Formatieren für Anzeige
             const cents = Math.round(expense.amount * 100).toString();
             if (cents.length <= 2) {
                 this.elements.expenseAmount.value = '0.' + cents.padStart(2, '0');
             } else {
                 this.elements.expenseAmount.value = cents.slice(0, -2) + '.' + cents.slice(-2);
             }
-            
+
+            // Raw Amount synchronisieren
+            this.rawAmount = Math.round(expense.amount * 100).toString();
+
             this.elements.expenseNote.value = expense.note || '';
             this.elements.deleteExpenseBtn.style.display = 'block';
             this.renderSplitCheckboxes(expense.split_among_ids);
-            } else {
+        } else {
             // New expense
             this.elements.expenseForm.reset();
             this.elements.expenseId.value = '';
             this.elements.deleteExpenseBtn.style.display = 'none';
+
+            // Raw Amount zurücksetzen
+            this.rawAmount = '';
 
             // Feature 7: Remember last payer
             const lastPayerId = localStorage.getItem('manneteilt_lastPayer');
