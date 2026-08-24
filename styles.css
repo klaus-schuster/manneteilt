@@ -219,7 +219,13 @@ input, select {
 }
 
 .expense-group-name { font-size: 1rem; }
-.expense-group-total { font-size: 1.1rem; font-weight: 700; }
+
+.expense-group-total {
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-align: right;
+    margin-left: auto;
+}
 
 .expense-group-items { padding-left: 0.75rem; }
 .expense-group-items .list-item { border-left: 3px solid var(--primary); }
