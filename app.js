@@ -97,7 +97,28 @@ class ManneTeiltApp {
 
         window.addEventListener('online', () => this.updateConnection(true));
         window.addEventListener('offline', () => this.updateConnection(false));
-    }
+
+        const amountInput = this.elements.expenseAmount;
+
+        amountInput.addEventListener('keydown', (e) => {
+            if (!/^[0-9]$/.test(e.key) && !['Backspace', 'Tab', 'Escape', 'Enter'].includes(e.key)) {
+                e.preventDefault();
+            }
+        });
+
+        amountInput.addEventListener('input', (e) => {
+            let raw = e.target.value.replace(/\D/g, '');
+            if (raw.length === 0) {
+                e.target.value = '';
+                return;
+            }
+            if (raw.length <= 2) {
+                e.target.value = '0.' + raw.padStart(2, '0');
+            } else {
+                e.target.value = raw.slice(0, -2) + '.' + raw.slice(-2);
+            }
+        });
+}
 
     // NEUE METHODE: createNewSession
     async createNewSession() {
@@ -390,11 +411,19 @@ class ManneTeiltApp {
             const expense = this.state.expenses.find(e => e.id === expenseId);
             this.elements.expenseId.value = expense.id;
             this.elements.payerSelect.value = expense.payer_id;
-            this.elements.expenseAmount.value = Math.round(expense.amount * 100);  // <- CENT ANZEIGEN
+            
+            // Euro → Cent → Formatieren
+            const cents = Math.round(expense.amount * 100).toString();
+            if (cents.length <= 2) {
+                this.elements.expenseAmount.value = '0.' + cents.padStart(2, '0');
+            } else {
+                this.elements.expenseAmount.value = cents.slice(0, -2) + '.' + cents.slice(-2);
+            }
+            
             this.elements.expenseNote.value = expense.note || '';
             this.elements.deleteExpenseBtn.style.display = 'block';
             this.renderSplitCheckboxes(expense.split_among_ids);
-        } else {
+            } else {
             // New expense
             this.elements.expenseForm.reset();
             this.elements.expenseId.value = '';
@@ -463,7 +492,7 @@ class ManneTeiltApp {
             id: this.elements.expenseId.value || crypto.randomUUID(),
             session_id: this.state.session.id,
             payer_id: this.elements.payerSelect.value,
-            amount: parseFloat(this.elements.expenseAmount.value) / 100,  // <- DURCH 100
+            amount: parseFloat(this.elements.expenseAmount.value),  // <- BEREITS IN EURO
             split_among_ids: splitIds,
             note: this.elements.expenseNote.value,
             created_at: this.elements.expenseId.value 

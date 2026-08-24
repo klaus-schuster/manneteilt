@@ -92,9 +92,12 @@
                 <label>Gezahlt von:</label>
                 <select id="payerSelect" required></select>
                 
-                <label>Betrag (Cent):</label>
-                <input type="number" id="expenseAmount" step="1" min="1" inputmode="numeric" required>
-                <p class="hint">z.B. 2599 = 25,99 €</p>
+                <label>Betrag (EUR):</label>
+                <input type="text" id="expenseAmount" 
+                       inputmode="numeric" 
+                       placeholder="2599 = 25.99 EUR"
+                       required>
+                <p class="hint">Tippe reine Ziffern — z.B. 2599 = 25.99 €</p>
 
                 <div class="split-header">
                     <label>Für wen?</label>
