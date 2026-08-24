@@ -390,7 +390,7 @@ class ManneTeiltApp {
             const expense = this.state.expenses.find(e => e.id === expenseId);
             this.elements.expenseId.value = expense.id;
             this.elements.payerSelect.value = expense.payer_id;
-            this.elements.expenseAmount.value = expense.amount;
+            this.elements.expenseAmount.value = Math.round(expense.amount * 100);  // <- CENT ANZEIGEN
             this.elements.expenseNote.value = expense.note || '';
             this.elements.deleteExpenseBtn.style.display = 'block';
             this.renderSplitCheckboxes(expense.split_among_ids);
@@ -463,7 +463,7 @@ class ManneTeiltApp {
             id: this.elements.expenseId.value || crypto.randomUUID(),
             session_id: this.state.session.id,
             payer_id: this.elements.payerSelect.value,
-            amount: parseFloat(this.elements.expenseAmount.value),
+            amount: parseFloat(this.elements.expenseAmount.value) / 100,  // <- DURCH 100
             split_among_ids: splitIds,
             note: this.elements.expenseNote.value,
             created_at: this.elements.expenseId.value 
