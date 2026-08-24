@@ -388,7 +388,7 @@ input, select {
 
 /* Smooth expand animation */
 .expense-group-items:not(.collapsed) {
-    max-height: 500px;
+    max-height: none;
 }
 
 .hint {
