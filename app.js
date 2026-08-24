@@ -30,65 +30,71 @@ class ManneTeiltApp {
     }
 
     cacheElements() {
-        this.elements = {
-            sessionSection: document.getElementById('sessionSection'),
-            sessionInfo: document.getElementById('sessionInfo'),
-            sessionName: document.getElementById('sessionName'),
-            sessionCodeDisplay: document.getElementById('sessionCodeDisplay'),
-            syncStatus: document.getElementById('syncStatus'),
-            newSessionBtn: document.getElementById('newSessionBtn'),
-            shareBtn: document.getElementById('shareBtn'),
-            joinForm: document.getElementById('joinForm'),
-            sessionCodeInput: document.getElementById('sessionCodeInput'),
-            joinSection: document.getElementById('joinSection'),
-            participantsSection: document.getElementById('participantsSection'),
-            participantsList: document.getElementById('participantsList'),
-            participantsListExpanded: document.getElementById('participantsListExpanded'),
-            participantsCompact: document.getElementById('participantsCompact'),
-            participantsChips: document.getElementById('participantsChips'),
-            participantCount: document.getElementById('participantCount'),
-            toggleParticipantsBtn: document.getElementById('toggleParticipantsBtn'),
-            addParticipantForm: document.getElementById('addParticipantForm'),
-            participantName: document.getElementById('participantName'),
-            expensesSection: document.getElementById('expensesSection'),
-            expensesList: document.getElementById('expensesList'),
-            addExpenseBtn: document.getElementById('addExpenseBtn'),
-            balanceSection: document.getElementById('balanceSection'),
-            balanceList: document.getElementById('balanceList'),
-            expenseModal: document.getElementById('expenseModal'),
-            expenseForm: document.getElementById('expenseForm'),
-            expenseId: document.getElementById('expenseId'),
-            payerSelect: document.getElementById('payerSelect'),
-            expenseAmount: document.getElementById('expenseAmount'),
-            splitParticipants: document.getElementById('splitParticipants'),
-            toggleAllSplit: document.getElementById('toggleAllSplit'),
-            expenseNote: document.getElementById('expenseNote'),
-            deleteExpenseBtn: document.getElementById('deleteExpenseBtn'),
-            toast: document.getElementById('toast')
-        };
-    }
+    this.elements = {
+        sessionSection: document.getElementById('sessionSection'),
+        sessionInfo: document.getElementById('sessionInfo'),
+        sessionName: document.getElementById('sessionName'),
+        sessionCodeDisplay: document.getElementById('sessionCodeDisplay'),
+        syncStatus: document.getElementById('syncStatus'),
+        newSessionBtn: document.getElementById('newSessionBtn'),
+        shareBtn: document.getElementById('shareBtn'),
+        newTripBtn: document.getElementById('newTripBtn'),  // <-- HINZUFÜGEN
+        joinForm: document.getElementById('joinForm'),
+        sessionCodeInput: document.getElementById('sessionCodeInput'),
+        joinSection: document.getElementById('joinSection'),
+        participantsSection: document.getElementById('participantsSection'),
+        participantsList: document.getElementById('participantsList'),
+        participantsListExpanded: document.getElementById('participantsListExpanded'),
+        participantsCompact: document.getElementById('participantsCompact'),
+        participantsChips: document.getElementById('participantsChips'),
+        participantCount: document.getElementById('participantCount'),
+        toggleParticipantsBtn: document.getElementById('toggleParticipantsBtn'),
+        addParticipantForm: document.getElementById('addParticipantForm'),
+        participantName: document.getElementById('participantName'),
+        expensesSection: document.getElementById('expensesSection'),
+        expensesList: document.getElementById('expensesList'),
+        addExpenseBtn: document.getElementById('addExpenseBtn'),
+        balanceSection: document.getElementById('balanceSection'),
+        balanceList: document.getElementById('balanceList'),
+        expenseModal: document.getElementById('expenseModal'),
+        expenseForm: document.getElementById('expenseForm'),
+        expenseId: document.getElementById('expenseId'),
+        payerSelect: document.getElementById('payerSelect'),
+        expenseAmount: document.getElementById('expenseAmount'),
+        splitParticipants: document.getElementById('splitParticipants'),
+        toggleAllSplit: document.getElementById('toggleAllSplit'),
+        expenseNote: document.getElementById('expenseNote'),
+        deleteExpenseBtn: document.getElementById('deleteExpenseBtn'),
+        toast: document.getElementById('toast')
+    };
+}
 
     bindEvents() {
         this.elements.newSessionBtn.addEventListener('click', () => this.createSession());
         this.elements.shareBtn.addEventListener('click', () => this.copyShareLink());
+
+        if (this.elements.newTripBtn) {
+            this.elements.newTripBtn.addEventListener('click', () => this.createNewSession());
+        }
+
         this.elements.joinForm.addEventListener('submit', (e) => {
             e.preventDefault();
             this.joinByCode(this.elements.sessionCodeInput.value);
         });
+
         this.elements.addParticipantForm.addEventListener('submit', (e) => {
             e.preventDefault();
             this.addParticipant(this.elements.participantName.value.trim());
         });
+
         this.elements.toggleParticipantsBtn.addEventListener('click', () => this.toggleParticipantsExpand());
         this.elements.addExpenseBtn.addEventListener('click', () => this.openExpenseModal());
         this.elements.expenseForm.addEventListener('submit', (e) => this.saveExpense(e));
         this.elements.deleteExpenseBtn.addEventListener('click', () => this.deleteExpense());
         this.elements.toggleAllSplit.addEventListener('click', () => this.toggleAllSplitCheckboxes());
+
         window.addEventListener('online', () => this.updateConnection(true));
         window.addEventListener('offline', () => this.updateConnection(false));
-        // NEUER BUTTON: New Trip
-        this.elements.newTripBtn.addEventListener('click', () => this.createNewSession());
-        // ... rest ...
     }
 
     // NEUE METHODE: createNewSession
