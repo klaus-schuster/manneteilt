@@ -362,3 +362,25 @@ input, select {
     margin-right: 0.5rem;
 }
 .btn-trip-btn:hover { background: rgba(255,255,255,0.3); }
+
+/* EXPAND ICON */
+.expand-icon {
+    font-size: 1rem;
+    margin-left: 0.5rem;
+    transition: transform 0.2s;
+}
+
+/* COLLAPSED ITEMS */
+.expense-group-items.collapsed {
+    display: none;
+}
+
+.expense-group-items {
+    overflow: hidden;
+    transition: max-height 0.3s ease-out;
+}
+
+/* Smooth expand animation */
+.expense-group-items:not(.collapsed) {
+    max-height: 500px;
+}

@@ -14,7 +14,9 @@ class ManneTeiltApp {
             expenses: [],
             isConnected: false,
             supabaseClient: null,
-            participantsExpanded: false
+            participantsExpanded: false,
+            // NEU: Expanded Groups Tracking
+            expandedGroups: new Set()  // Speichert payer IDs
         };
         this.elements = {};
         this.init();
@@ -464,48 +466,33 @@ class ManneTeiltApp {
             amount: parseFloat(this.elements.expenseAmount.value),
             split_among_ids: splitIds,
             note: this.elements.expenseNote.value,
-            // ORIGINAL createdAt behalten bei Edit
             created_at: this.elements.expenseId.value 
-                ? this.state.expenses.find(e => e.id === this.elements.expenseId.value)?.created_at 
+                ? this.state.expenses.find(ex => ex.id === this.elements.expenseId.value)?.created_at 
                 : new Date().toISOString()
         };
 
         if (this.elements.expenseId.value) {
-            this.state.expenses = this.state.expenses.filter(e => e.id !== this.elements.expenseId.value);
+            this.state.expenses = this.state.expenses.filter(ex => ex.id !== this.elements.expenseId.value);
         }
 
         this.state.expenses.push(expenseData);
         this.persistData('expenses');
-        this.render();
 
-        // Collapse participants after saving
+        // COLLAPSIBLE LOGIC: Nur diese Gruppe expandieren
+        this.expandOnlyThisGroup(this.elements.payerSelect.value);
+
+        // Participants collapsen
         this.state.participantsExpanded = false;
         this.renderParticipants();
 
-        // Feature 7: Save last payer
-        localStorage.setItem('manneteilt_lastPayer', this.elements.payerSelect.value);
+        // Save last payer
+        localStorage.setItem('manneteil_lastPayer', this.elements.payerSelect.value);
 
         try {
             const table = this.state.supabaseClient.from('expenses');
             await (this.elements.expenseId.value
-                ? table.upsert([{
-                    id: expenseData.id,
-                    session_id: expenseData.session_id,
-                    payer_id: expenseData.payer_id,
-                    amount: expenseData.amount,
-                    split_among_ids: expenseData.split_among_ids,
-                    note: expenseData.note,
-                    created_at: expenseData.created_at
-                }])
-                : table.insert([{
-                    id: expenseData.id,
-                    session_id: expenseData.session_id,
-                    payer_id: expenseData.payer_id,
-                    amount: expenseData.amount,
-                    split_among_ids: expenseData.split_among_ids,
-                    note: expenseData.note,
-                    created_at: expenseData.created_at
-                }])
+                ? table.upsert([expenseData])
+                : table.insert([expenseData])
             );
         } catch (err) {
             console.error('Save expense failed:', err);
@@ -513,11 +500,6 @@ class ManneTeiltApp {
 
         this.elements.expenseModal.close();
         this.showToast('💰 Ausgabe gespeichert — Manne teilt!');
-
-        // SCROLL TO TOP after save
-        //setTimeout(() => {
-        //window.scrollTo({ top: 0, behavior: 'smooth' });
-        //}, 300);
     }
 
     async deleteExpense() {
@@ -739,12 +721,12 @@ class ManneTeiltApp {
             return;
         }
 
-        // Feature 5: Sort by created_at
+        // Sort by created_at (chronologisch)
         const sorted = [...this.state.expenses].sort((a, b) =>
             new Date(a.created_at) - new Date(b.created_at)
         );
 
-        // Feature 4: Group by payer
+        // Gruppieren nach payer
         const groups = {};
         sorted.forEach(e => {
             if (!groups[e.payer_id]) {
@@ -753,22 +735,24 @@ class ManneTeiltApp {
             groups[e.payer_id].push(e);
         });
 
+        // HTML rendern mit Collapsible Logic
         let html = '';
         Object.entries(groups).forEach(([payerId, expenses]) => {
             const payer = this.state.participants.find(p => p.id === payerId);
             const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+            const isExpanded = this.state.expandedGroups.has(payerId);
 
             html += `
-                <div class="expense-group">
-                    <div class="expense-group-header">
+                <div class="expense-group" data-payer-id="${payerId}">
+                    <div class="expense-group-header" onclick="app.toggleGroup('${payerId}')">
                         <span class="expense-group-name">${payer ? payer.name : '?'}</span>
                         <span class="expense-group-total">${total.toFixed(2)} €</span>
+                        <span class="expand-icon">${isExpanded ? '▴' : '▾'}</span>
                     </div>
-                    <div class="expense-group-items">
+                    <div class="expense-group-items ${isExpanded ? '' : 'collapsed'}">
             `;
 
             expenses.forEach(e => {
-                // Feature 9: Split indicator
                 const isForAll = e.split_among_ids.length === this.state.participants.length;
                 const splitNames = e.split_among_ids.map(id =>
                     this.state.participants.find(p => p.id === id)
@@ -793,6 +777,25 @@ class ManneTeiltApp {
         });
 
         this.elements.expensesList.innerHTML = html;
+    }
+
+    toggleGroup(payerId) {
+        if (this.state.expandedGroups.has(payerId)) {
+            this.state.expandedGroups.delete(payerId);
+        } else {
+            this.state.expandedGroups.add(payerId);
+        }
+        this.renderExpenses();
+    }
+
+    // Nach saveExpense: Nur diese Gruppe expandiert lassen
+    expandOnlyThisGroup(payerId) {
+        this.state.expandedGroups.clear();
+        this.state.expandedGroups.add(payerId);
+        this.renderExpenses();
+        setTimeout(() => {
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }, 300);
     }
 
     renderBalance() {
