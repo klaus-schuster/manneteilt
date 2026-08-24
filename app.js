@@ -1,5 +1,5 @@
 // ============================================
-// MANNETEILT - Core Application v5
+// MANNETEILT - Core Application v6
 // "Manne teilt, alle wissen Bescheid"
 // ============================================
 
@@ -34,6 +34,7 @@ class ManneTeiltApp {
             sessionSection: document.getElementById('sessionSection'),
             sessionInfo: document.getElementById('sessionInfo'),
             sessionName: document.getElementById('sessionName'),
+            sessionCodeDisplay: document.getElementById('sessionCodeDisplay'),
             syncStatus: document.getElementById('syncStatus'),
             newSessionBtn: document.getElementById('newSessionBtn'),
             shareBtn: document.getElementById('shareBtn'),
@@ -60,6 +61,7 @@ class ManneTeiltApp {
             payerSelect: document.getElementById('payerSelect'),
             expenseAmount: document.getElementById('expenseAmount'),
             splitParticipants: document.getElementById('splitParticipants'),
+            toggleAllSplit: document.getElementById('toggleAllSplit'),
             expenseNote: document.getElementById('expenseNote'),
             deleteExpenseBtn: document.getElementById('deleteExpenseBtn'),
             toast: document.getElementById('toast')
@@ -81,6 +83,7 @@ class ManneTeiltApp {
         this.elements.addExpenseBtn.addEventListener('click', () => this.openExpenseModal());
         this.elements.expenseForm.addEventListener('submit', (e) => this.saveExpense(e));
         this.elements.deleteExpenseBtn.addEventListener('click', () => this.deleteExpense());
+        this.elements.toggleAllSplit.addEventListener('click', () => this.toggleAllSplitCheckboxes());
         window.addEventListener('online', () => this.updateConnection(true));
         window.addEventListener('offline', () => this.updateConnection(false));
     }
@@ -88,13 +91,17 @@ class ManneTeiltApp {
     async registerSW() {
         if ('serviceWorker' in navigator) {
             try {
-                await navigator.serviceWorker.register('/sw.js');
+                await navigator.serviceWorker.register('./sw.js');
                 console.log('✅ ManneTeilt Service Worker registriert');
             } catch (err) {
                 console.error('❌ SW Registration failed:', err);
             }
         }
     }
+
+    // ============================================
+    // SUPABASE
+    // ============================================
 
     initSupabase() {
         const { createClient } = supabase;
@@ -109,6 +116,10 @@ class ManneTeiltApp {
             this.elements.syncStatus.className = connected ? 'status-badge online' : 'status-badge offline';
         }
     }
+
+    // ============================================
+    // SESSION MANAGEMENT
+    // ============================================
 
     generateSessionCode() {
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -131,7 +142,7 @@ class ManneTeiltApp {
             createdAt: new Date().toISOString()
         };
 
-        localStorage.setItem('manneteil_session', JSON.stringify(session));
+        localStorage.setItem('manneteilt_session', JSON.stringify(session));
         this.state.session = session;
 
         try {
@@ -175,7 +186,7 @@ class ManneTeiltApp {
                 code: data.code,
                 createdAt: data.created_at
             };
-            localStorage.setItem('manneteil_session', JSON.stringify(this.state.session));
+            localStorage.setItem('manneteilt_session', JSON.stringify(this.state.session));
             await this.loadData();
 
             this.showToast(`📥 Reise "${data.name}" beigetreten!`);
@@ -201,7 +212,7 @@ class ManneTeiltApp {
                     code: data.code,
                     createdAt: data.created_at
                 };
-                localStorage.setItem('manneteil_session', JSON.stringify(this.state.session));
+                localStorage.setItem('manneteilt_session', JSON.stringify(this.state.session));
                 await this.loadData();
                 this.showToast('📥 Daten geladen — ManneTeilt');
                 return true;
@@ -210,13 +221,13 @@ class ManneTeiltApp {
             console.error('Load from Supabase failed:', err);
         }
 
-        const saved = localStorage.getItem('manneteil_session');
+        const saved = localStorage.getItem('manneteilt_session');
         if (saved) {
             const localSession = JSON.parse(saved);
             if (localSession.id === sessionId) {
                 this.state.session = localSession;
-                this.state.participants = JSON.parse(localStorage.getItem('manneteil_participants') || '[]');
-                this.state.expenses = JSON.parse(localStorage.getItem('manneteil_expenses') || '[]');
+                this.state.participants = JSON.parse(localStorage.getItem('manneteilt_participants') || '[]');
+                this.state.expenses = JSON.parse(localStorage.getItem('manneteilt_expenses') || '[]');
                 return true;
             }
         }
@@ -261,6 +272,10 @@ class ManneTeiltApp {
         this.render();
     }
 
+    // ============================================
+    // PARTICIPANTS
+    // ============================================
+
     async addParticipant(name) {
         if (!name) return;
 
@@ -292,7 +307,7 @@ class ManneTeiltApp {
 
     async deleteParticipant(id) {
         const hasExpenses = this.state.expenses.some(e =>
-            e.payer_id === id || e.split_among_ids?.includes(id)
+            e.payer_id === id || (e.split_among_ids && e.split_among_ids.includes(id))
         );
 
         if (hasExpenses) {
@@ -320,13 +335,22 @@ class ManneTeiltApp {
         this.renderParticipants();
     }
 
+    // ============================================
+    // EXPENSES
+    // ============================================
+
     openExpenseModal(expenseId = null) {
         if (this.state.participants.length === 0) {
             this.showToast('⚠️ Erst Teilnehmer hinzufügen!', 'error');
             return;
         }
 
+        // Bug 11 Fix: Populate dropdown FIRST, then set value
+        this.elements.payerSelect.innerHTML = this.state.participants
+            .map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+
         if (expenseId) {
+            // Edit mode
             const expense = this.state.expenses.find(e => e.id === expenseId);
             this.elements.expenseId.value = expense.id;
             this.elements.payerSelect.value = expense.payer_id;
@@ -335,16 +359,29 @@ class ManneTeiltApp {
             this.elements.deleteExpenseBtn.style.display = 'block';
             this.renderSplitCheckboxes(expense.split_among_ids);
         } else {
+            // New expense
             this.elements.expenseForm.reset();
             this.elements.expenseId.value = '';
             this.elements.deleteExpenseBtn.style.display = 'none';
+
+            // Feature 7: Remember last payer
+            const lastPayerId = localStorage.getItem('manneteilt_lastPayer');
+            if (lastPayerId) {
+                const exists = this.state.participants.find(p => p.id === lastPayerId);
+                if (exists) {
+                    this.elements.payerSelect.value = lastPayerId;
+                }
+            }
+
             this.renderSplitCheckboxes(null);
         }
 
-        this.elements.payerSelect.innerHTML = this.state.participants
-            .map(p => `<option value="${p.id}">${p.name}</option>`).join('');
-
         this.elements.expenseModal.showModal();
+
+        // Feature 6: Auto-focus on amount
+        setTimeout(() => {
+            this.elements.expenseAmount.focus();
+        }, 50);
     }
 
     renderSplitCheckboxes(selectedIds) {
@@ -358,6 +395,21 @@ class ManneTeiltApp {
                     </label>
                 `;
             }).join('');
+
+        this.updateToggleAllSplitText();
+    }
+
+    toggleAllSplitCheckboxes() {
+        const checkboxes = this.elements.splitParticipants.querySelectorAll('input[type="checkbox"]');
+        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+        checkboxes.forEach(cb => cb.checked = !allChecked);
+        this.updateToggleAllSplitText();
+    }
+
+    updateToggleAllSplitText() {
+        const checkboxes = this.elements.splitParticipants.querySelectorAll('input[type="checkbox"]');
+        const allChecked = Array.from(checkboxes).every(cb => cb.checked);
+        this.elements.toggleAllSplit.textContent = allChecked ? 'Alle abwählen' : 'Alle auswählen';
     }
 
     async saveExpense(e) {
@@ -389,8 +441,12 @@ class ManneTeiltApp {
         this.persistData('expenses');
         this.render();
 
+        // Collapse participants after saving
         this.state.participantsExpanded = false;
         this.renderParticipants();
+
+        // Feature 7: Save last payer
+        localStorage.setItem('manneteilt_lastPayer', this.elements.payerSelect.value);
 
         try {
             const table = this.state.supabaseClient.from('expenses');
@@ -439,6 +495,10 @@ class ManneTeiltApp {
         this.elements.expenseModal.close();
         this.showToast('🗑️ Ausgabe gelöscht');
     }
+
+    // ============================================
+    // BALANCE CALCULATION
+    // ============================================
 
     calculateBalances() {
         const balances = {};
@@ -496,13 +556,21 @@ class ManneTeiltApp {
         return settlements;
     }
 
+    // ============================================
+    // PERSISTENCE
+    // ============================================
+
     persistData(type) {
         if (type === 'participants') {
-            localStorage.setItem('manneteil_participants', JSON.stringify(this.state.participants));
+            localStorage.setItem('manneteilt_participants', JSON.stringify(this.state.participants));
         } else if (type === 'expenses') {
-            localStorage.setItem('manneteil_expenses', JSON.stringify(this.state.expenses));
+            localStorage.setItem('manneteilt_expenses', JSON.stringify(this.state.expenses));
         }
     }
+
+    // ============================================
+    // SHARE
+    // ============================================
 
     getShareLink() {
         if (!this.state.session) return '';
@@ -512,7 +580,7 @@ class ManneTeiltApp {
 
     copyShareLink() {
         const link = this.getShareLink();
-        const code = this.state.session?.code || '';
+        const code = this.state.session ? this.state.session.code : '';
         const shareText = code
             ? `ManneTeilt — Reise "${this.state.session.name}"\nCode: ${code}\nOder Link: ${link}`
             : link;
@@ -534,11 +602,11 @@ class ManneTeiltApp {
                 window.history.replaceState({}, '', window.location.pathname);
             }
         } else {
-            const saved = localStorage.getItem('manneteil_session');
+            const saved = localStorage.getItem('manneteilt_session');
             if (saved) {
                 this.state.session = JSON.parse(saved);
-                this.state.participants = JSON.parse(localStorage.getItem('manneteil_participants') || '[]');
-                this.state.expenses = JSON.parse(localStorage.getItem('manneteil_expenses') || '[]');
+                this.state.participants = JSON.parse(localStorage.getItem('manneteilt_participants') || '[]');
+                this.state.expenses = JSON.parse(localStorage.getItem('manneteilt_expenses') || '[]');
 
                 if (this.state.supabaseClient && this.state.session) {
                     await this.loadData();
@@ -547,6 +615,10 @@ class ManneTeiltApp {
         }
     }
 
+    // ============================================
+    // RENDERING
+    // ============================================
+
     render() {
         if (this.state.session) {
             this.elements.sessionName.textContent = this.state.session.name;
@@ -554,11 +626,18 @@ class ManneTeiltApp {
             this.elements.shareBtn.classList.remove('hidden');
             this.elements.newSessionBtn.classList.add('hidden');
             this.elements.joinSection.classList.add('hidden');
+
+            // Feature 3: Show session code in header
+            if (this.state.session.code) {
+                this.elements.sessionCodeDisplay.textContent = `CODE: ${this.state.session.code}`;
+                this.elements.sessionCodeDisplay.classList.remove('hidden');
+            }
         } else {
             this.elements.sessionInfo.classList.add('hidden');
             this.elements.shareBtn.classList.add('hidden');
             this.elements.newSessionBtn.classList.remove('hidden');
             this.elements.joinSection.classList.remove('hidden');
+            this.elements.sessionCodeDisplay.classList.add('hidden');
         }
 
         this.renderParticipants();
@@ -610,39 +689,84 @@ class ManneTeiltApp {
     }
 
     renderExpenses() {
-        if (this.elements.expensesList) {
-            this.elements.expensesList.innerHTML = this.state.expenses.length
-                ? this.state.expenses.map(e => {
-                    const payer = this.state.participants.find(p => p.id === e.payer_id);
-                    return `
-                        <div class="list-item" onclick="app.openExpenseModal('${e.id}')">
-                            <div>
-                                <strong>${e.amount.toFixed(2)} €</strong>
-                                <small>von ${payer?.name || '?'}</small>
-                                ${e.note ? `<br><span class="note">${e.note}</span>` : ''}
-                            </div>
-                        </div>
-                    `;
-                }).join('')
-                : '<p class="empty">Noch keine Ausgaben</p>';
+        if (!this.elements.expensesList) return;
+
+        if (this.state.expenses.length === 0) {
+            this.elements.expensesList.innerHTML = '<p class="empty">Noch keine Ausgaben</p>';
+            return;
         }
+
+        // Feature 5: Sort by created_at
+        const sorted = [...this.state.expenses].sort((a, b) =>
+            new Date(a.created_at) - new Date(b.created_at)
+        );
+
+        // Feature 4: Group by payer
+        const groups = {};
+        sorted.forEach(e => {
+            if (!groups[e.payer_id]) {
+                groups[e.payer_id] = [];
+            }
+            groups[e.payer_id].push(e);
+        });
+
+        let html = '';
+        Object.entries(groups).forEach(([payerId, expenses]) => {
+            const payer = this.state.participants.find(p => p.id === payerId);
+            const total = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+            html += `
+                <div class="expense-group">
+                    <div class="expense-group-header">
+                        <span class="expense-group-name">${payer ? payer.name : '?'}</span>
+                        <span class="expense-group-total">${total.toFixed(2)} €</span>
+                    </div>
+                    <div class="expense-group-items">
+            `;
+
+            expenses.forEach(e => {
+                // Feature 9: Split indicator
+                const isForAll = e.split_among_ids.length === this.state.participants.length;
+                const splitNames = e.split_among_ids.map(id =>
+                    this.state.participants.find(p => p.id === id)
+                ).filter(p => p).map(p => p.name).join(', ');
+
+                const splitBadge = isForAll
+                    ? '<span class="split-all">👥 alle</span>'
+                    : `<span class="split-subset">für ${splitNames}</span>`;
+
+                html += `
+                    <div class="list-item" onclick="app.openExpenseModal('${e.id}')">
+                        <div>
+                            <strong>${e.amount.toFixed(2)} €</strong>
+                            ${splitBadge}
+                            ${e.note ? `<br><span class="note">${e.note}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            });
+
+            html += '</div></div>';
+        });
+
+        this.elements.expensesList.innerHTML = html;
     }
 
     renderBalance() {
-        if (this.elements.balanceList) {
-            const balances = this.calculateBalances();
-            const settlements = this.simplifyDebts(balances);
+        if (!this.elements.balanceList) return;
 
-            if (settlements.length === 0) {
-                this.elements.balanceList.innerHTML = '<div class="card"><p>🎉 Alles ausgeglichen — Manne ist zufrieden!</p></div>';
-            } else {
-                this.elements.balanceList.innerHTML = settlements.map(s => `
-                    <div class="card settlement-card">
-                        <div class="settlement-arrow">${s.from} → ${s.to}</div>
-                        <div class="settlement-amount">${s.amount.toFixed(2)} €</div>
-                    </div>
-                `).join('');
-            }
+        const balances = this.calculateBalances();
+        const settlements = this.simplifyDebts(balances);
+
+        if (settlements.length === 0) {
+            this.elements.balanceList.innerHTML = '<div class="card"><p>🎉 Alles ausgeglichen — Manne ist zufrieden!</p></div>';
+        } else {
+            this.elements.balanceList.innerHTML = settlements.map(s => `
+                <div class="card settlement-card">
+                    <div class="settlement-arrow">${s.from} → ${s.to}</div>
+                    <div class="settlement-amount">${s.amount.toFixed(2)} €</div>
+                </div>
+            `).join('');
         }
     }
 
@@ -667,6 +791,10 @@ class ManneTeiltApp {
         }, 3000);
     }
 }
+
+// ============================================
+// INIT
+// ============================================
 
 let app;
 
