@@ -92,7 +92,7 @@ class ManneTeiltApp {
         this.elements.toggleParticipantsBtn.addEventListener('click', () => this.toggleParticipantsExpand());
 
         this.elements.addExpenseBtn.addEventListener('click', () => this.openExpenseModal());
-        this.elements.expenseForm.addEventListener('submit', (e) => this.Expense(e));
+        this.elements.expenseForm.addEventListener('submit', (e) => this.saveExpense(e));
         this.elements.deleteExpenseBtn.addEventListener('click', () => this.deleteExpense());
         this.elements.toggleAllSplit.addEventListener('click', () => this.toggleAllSplitCheckboxes());
 
