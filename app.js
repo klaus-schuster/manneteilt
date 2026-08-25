@@ -92,7 +92,7 @@ class ManneTeiltApp {
         this.elements.toggleParticipantsBtn.addEventListener('click', () => this.toggleParticipantsExpand());
 
         this.elements.addExpenseBtn.addEventListener('click', () => this.openExpenseModal());
-        this.elements.expenseForm.addEventListener('submit', (e) => this.saveExpense(e));
+        this.elements.expenseForm.addEventListener('submit', (e) => this.Expense(e));
         this.elements.deleteExpenseBtn.addEventListener('click', () => this.deleteExpense());
         this.elements.toggleAllSplit.addEventListener('click', () => this.toggleAllSplitCheckboxes());
 
@@ -300,8 +300,8 @@ class ManneTeiltApp {
             console.error('Load from Supabase failed:', err);
         }
 
-        const saved = localStorage.getItem('manneteilt_session');
-        if (saved) {
+        const d = localStorage.getItem('manneteilt_session');
+        if (d) {
             const localSession = JSON.parse(saved);
             if (localSession.id === sessionId) {
                 this.state.session = localSession;
@@ -507,44 +507,48 @@ class ManneTeiltApp {
 
     async saveExpense(e) {
         e.preventDefault();
-
+    
         const splitIds = Array.from(this.elements.splitParticipants.querySelectorAll('input:checked'))
             .map(cb => cb.value);
-
+    
         if (splitIds.length === 0) {
             this.showToast('⚠️ Mindestens eine Person auswählen!', 'error');
             return;
         }
-
+    
         const expenseData = {
             id: this.elements.expenseId.value || crypto.randomUUID(),
             session_id: this.state.session.id,
             payer_id: this.elements.payerSelect.value,
-            amount: parseFloat(this.elements.expenseAmount.value),  // <- BEREITS IN EURO
+            amount: parseFloat(this.elements.expenseAmount.value),
             split_among_ids: splitIds,
             note: this.elements.expenseNote.value,
             created_at: this.elements.expenseId.value 
                 ? this.state.expenses.find(ex => ex.id === this.elements.expenseId.value)?.created_at 
                 : new Date().toISOString()
         };
-
+    
         if (this.elements.expenseId.value) {
             this.state.expenses = this.state.expenses.filter(ex => ex.id !== this.elements.expenseId.value);
         }
-
+    
         this.state.expenses.push(expenseData);
         this.persistData('expenses');
-
-        // COLLAPSIBLE LOGIC: Nur diese Gruppe expandieren
-        this.expandOnlyThisGroup(this.elements.payerSelect.value);
-
+    
+        // EXPANDED GROUP LOGIC VOR RENDERN SETZEN
+        this.state.expandedGroups.clear();
+        this.state.expandedGroups.add(this.elements.payerSelect.value);
+    
         // Participants collapsen
         this.state.participantsExpanded = false;
-        this.renderParticipants();
-
+        
+        // ALLES RENDERN (Expenses + Balance)
+        this.render();
+    
         // Save last payer
         localStorage.setItem('manneteil_lastPayer', this.elements.payerSelect.value);
-
+    
+        // Sync to Supabase
         try {
             const table = this.state.supabaseClient.from('expenses');
             await (this.elements.expenseId.value
@@ -554,9 +558,12 @@ class ManneTeiltApp {
         } catch (err) {
             console.error('Save expense failed:', err);
         }
-
+    
         this.elements.expenseModal.close();
         this.showToast('💰 Ausgabe gespeichert — Manne teilt!');
+        
+        // Scroll to top nach Modal schliessen
+        setTimeout(() => window.scrollTo({ top: 0, behavior: 'smooth' }), 300);
     }
 
     async deleteExpense() {
